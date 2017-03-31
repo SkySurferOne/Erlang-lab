@@ -1,0 +1,7 @@
+# intellij
+.idea
+*.iml
+
+# erlang
+erl_crash.dump
+*.beam
