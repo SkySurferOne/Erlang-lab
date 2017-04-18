@@ -87,7 +87,6 @@ getStationMean(StationName, MeasureType, Monitor) ->
 getDailyMean(Date, MeasureType, Monitor) ->
   StationNames = ?GetKeys(Monitor),
   Values = lists:flatmap(fun(StationName) -> getOneValue(StationName, Date, MeasureType, Monitor) end, StationNames),
-  io:fwrite("Val ~62p~n", [Values]),
   avr(Values).
 
 getDeviation(MeasureType, Time, Monitor) ->
@@ -99,9 +98,7 @@ getDeviation(MeasureType, Time, Monitor) ->
     end
     , lists:map(fun(StationName) ->
       ?GetValueFromDict(StationName, Monitor) end, StationNames)),
-  io:fwrite("Meas ~62p~n", [Measures]),
   Values = lists:map(fun(R) -> R#measure.value end, Measures),
-  io:fwrite("Val ~62p~n", [Values]),
   std_dev(Values).
 
 test() ->
