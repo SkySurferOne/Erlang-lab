@@ -14,7 +14,7 @@
 
 %% API
 -export([createMonitor/0, addStation/3, addValue/5, removeValue/4,
-  getOneValue/4, getStationMean/3, getDailyMean/3, getDeviation/2, test/0]).
+  getOneValue/4, getStationMean/3, getDailyMean/3, getDeviation/3, test/0]).
 
 
 -record(station, {coords, measurements = []}).
@@ -30,17 +30,27 @@
   dict:append(StationName, NewStationRecord, dict:erase(StationName, Monitor))).
 -define(FilterMeasurements(StationRecord, Fun),
   lists:filter(fun(R) ->
-    Fun(element(1, R#measure.datetime), R#measure.measureType) end, StationRecord#station.measurements)).
--define(GetKeys(Dict), lists:map(fun (T) -> element(1, T) end, dict:to_list(Dict))).
+    Fun(R#measure.datetime, R#measure.measureType) end, StationRecord#station.measurements)).
+-define(GetKeys(Dict), lists:map(fun(T) -> element(1, T) end, dict:to_list(Dict))).
 
 % helper functions
 avr(List) -> avr(0, 0, List).
 avr(0, _, []) -> error(badarith);
 avr(C, Sum, []) -> Sum / C;
-avr(C, Sum, [H|T]) -> avr(C+1, Sum+H, T).
+avr(C, Sum, [H | T]) -> avr(C + 1, Sum + H, T).
 
-date(Datetime) -> element(1, Datetime).
-time(Datetime) -> element(2, Datetime).
+std_dev([]) -> error(badarith);
+std_dev(List) when length(List) == 1 -> error(badarith);
+std_dev(List) ->
+  Average = lists:sum(List) / length(List),
+  F = fun(X, Sum) -> Sum + (X - Average) * (X - Average) end,
+  Variance = lists:foldl(F, 0.0, List) / (length(List) - 1),
+  math:sqrt(Variance).
+
+date({Date, _}) -> Date.
+time({_, Time}) -> Time.
+hour({H, _, _}) -> H;
+hour({_, {H, _, _}}) -> H.
 
 %% API implementation
 createMonitor() -> dict:new().
@@ -57,30 +67,42 @@ addValue(StationName, DateTime, MeasureType, Value, Monitor) ->
 
 removeValue(StationName, Date, MeasureType, Monitor) ->
   StationRecord = ?GetValueFromDict(StationName, Monitor),
-  MeasurementsMod = ?FilterMeasurements(StationRecord, fun(ThatDate, ThatMeasureType) ->
-    (Date /= ThatDate) and (MeasureType /= ThatMeasureType) end),
+  MeasurementsMod = ?FilterMeasurements(StationRecord, fun(ThatDateTime, ThatMeasureType) ->
+    (Date /= date(ThatDateTime)) and (MeasureType /= ThatMeasureType) end),
   ?UpdateDict(StationName, ?ReplaceMeasurements(StationRecord, MeasurementsMod), Monitor).
 
 getOneValue(StationName, Date, MeasureType, Monitor) ->
   StationRecord = ?GetValueFromDict(StationName, Monitor),
-  MeasurementsMod = ?FilterMeasurements(StationRecord, fun(ThatDate, ThatMeasureType) ->
-    (Date == ThatDate) and (MeasureType == ThatMeasureType) end),
-  lists:map(fun (R) -> R#measure.value end, MeasurementsMod).
+  MeasurementsMod = ?FilterMeasurements(StationRecord, fun(ThatDateTime, ThatMeasureType) ->
+    (Date == date(ThatDateTime)) and (MeasureType == ThatMeasureType) end),
+  lists:map(fun(R) -> R#measure.value end, MeasurementsMod).
 
 getStationMean(StationName, MeasureType, Monitor) ->
   StationRecord = ?GetValueFromDict(StationName, Monitor),
   MeasurementsMod = ?FilterMeasurements(StationRecord, fun(_, ThatMeasureType) ->
     (MeasureType == ThatMeasureType) end),
-  Values = lists:map(fun (R) -> R#measure.value end, MeasurementsMod),
+  Values = lists:map(fun(R) -> R#measure.value end, MeasurementsMod),
   avr(Values).
 
 getDailyMean(Date, MeasureType, Monitor) ->
   StationNames = ?GetKeys(Monitor),
-  Values = lists:flatmap(fun (StationName) -> getOneValue(StationName, Date, MeasureType, Monitor) end, StationNames),
+  Values = lists:flatmap(fun(StationName) -> getOneValue(StationName, Date, MeasureType, Monitor) end, StationNames),
   io:fwrite("Val ~62p~n", [Values]),
   avr(Values).
 
-getDeviation(MeasureType, Time) -> null.
+getDeviation(MeasureType, Time, Monitor) ->
+  StationNames = ?GetKeys(Monitor),
+  Measures = lists:flatmap(
+    fun(StationRecord) ->
+      ?FilterMeasurements(StationRecord, fun(ThatDateTime, ThatMeasureType) ->
+        (hour(Time) == hour(ThatDateTime)) and (MeasureType == ThatMeasureType) end)
+    end
+    , lists:map(fun(StationName) ->
+      ?GetValueFromDict(StationName, Monitor) end, StationNames)),
+  io:fwrite("Meas ~62p~n", [Measures]),
+  Values = lists:map(fun(R) -> R#measure.value end, Measures),
+  io:fwrite("Val ~62p~n", [Values]),
+  std_dev(Values).
 
 test() ->
   P = createMonitor(),
@@ -98,5 +120,7 @@ test() ->
   io:fwrite("~62p~n", [Avr]),
   Avr2 = getDailyMean(date(Datetime), 'PM2', P7),
   io:fwrite("~62p~n", [Avr2]),
+  StdDev = getDeviation('PM2', time(Datetime), P7),
+  io:fwrite("~62p~n", [StdDev]),
   P8 = removeValue('Station 1', date(Datetime), 'PM2', P7),
   io:fwrite("~62p~n", [P8]).
