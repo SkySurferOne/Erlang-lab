@@ -109,7 +109,7 @@ test() ->
   P4 = addValue('Station 1', Datetime, 'PM2', 10.0, P3),
   P5 = addValue('Station 1', Datetime, 'PM2', 20.0, P4),
   P6 = addValue('Station 1', Datetime, 'PM2', 30.0, P5),
-  P7 = addValue('Station 2', Datetime, 'PM2', 30.0, P6),
+  P7 = addValue('Station 2', {{2017,5,4},{21,22,39}}, 'PM2', 30.0, P6),
   io:fwrite("~62p~n", [P7]),
   Values = getOneValue('Station 1', date(Datetime), 'PM2', P7),
   io:fwrite("~62p~n", [Values]),
