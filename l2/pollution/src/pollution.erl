@@ -53,30 +53,41 @@ hour({H, _, _}) -> H;
 hour({_, {H, _, _}}) -> H.
 
 %% API implementation
+
+%% tworzy i zwraca nowy monitor zanieczyszczeń
 createMonitor() -> dict:new().
 addStation(StationName, Coords, Monitor) ->
   case dict:is_key(StationName, Monitor) of
     false -> dict:append(StationName, #station{coords = Coords}, Monitor);
-    true -> error(badarg)
+    true -> {error, exist}
   end.
 
+%% dodaje do monitora wpis o nowej stacji pomiarowej
+%% zwraca zaktualizowany monitor
 addValue(StationName, DateTime, MeasureType, Value, Monitor) ->
   StationRecord = ?GetValueFromDict(StationName, Monitor),
-  StationRecordMod = ?AddMeasureToStation(StationRecord, DateTime, MeasureType, Value),
-  ?UpdateDict(StationName, StationRecordMod, Monitor).
+  case lists:member({measure, MeasureType, DateTime, Value}, element(3, StationRecord)) of
+    true -> {error, exist};
+    false -> StationRecordMod = ?AddMeasureToStation(StationRecord, DateTime, MeasureType, Value),
+      ?UpdateDict(StationName, StationRecordMod, Monitor)
+  end.
 
+%% usuwa odczyt ze stacji
+%% zwraca zaktualizowany monitor
 removeValue(StationName, Date, MeasureType, Monitor) ->
   StationRecord = ?GetValueFromDict(StationName, Monitor),
   MeasurementsMod = ?FilterMeasurements(StationRecord, fun(ThatDateTime, ThatMeasureType) ->
     (Date /= date(ThatDateTime)) and (MeasureType /= ThatMeasureType) end),
   ?UpdateDict(StationName, ?ReplaceMeasurements(StationRecord, MeasurementsMod), Monitor).
 
+%%  zwraca wartość pomiaru o zadanym typie, z zadanej daty i stacji
 getOneValue(StationName, Date, MeasureType, Monitor) ->
   StationRecord = ?GetValueFromDict(StationName, Monitor),
   MeasurementsMod = ?FilterMeasurements(StationRecord, fun(ThatDateTime, ThatMeasureType) ->
     (Date == date(ThatDateTime)) and (MeasureType == ThatMeasureType) end),
   lists:map(fun(R) -> R#measure.value end, MeasurementsMod).
 
+%% zwraca średnią wartość parametru danego typu z zadanej stacji
 getStationMean(StationName, MeasureType, Monitor) ->
   StationRecord = ?GetValueFromDict(StationName, Monitor),
   MeasurementsMod = ?FilterMeasurements(StationRecord, fun(_, ThatMeasureType) ->
@@ -84,6 +95,8 @@ getStationMean(StationName, MeasureType, Monitor) ->
   Values = lists:map(fun(R) -> R#measure.value end, MeasurementsMod),
   avr(Values).
 
+%% zwraca średnią wartość parametru danego typu,
+%% danego dnia na wszystkich stacjach
 getDailyMean(Date, MeasureType, Monitor) ->
   StationNames = ?GetKeys(Monitor),
   Values = lists:flatmap(fun(StationName) -> getOneValue(StationName, Date, MeasureType, Monitor) end, StationNames),
@@ -109,7 +122,7 @@ test() ->
   P4 = addValue('Station 1', Datetime, 'PM2', 10.0, P3),
   P5 = addValue('Station 1', Datetime, 'PM2', 20.0, P4),
   P6 = addValue('Station 1', Datetime, 'PM2', 30.0, P5),
-  P7 = addValue('Station 2', {{2017,5,4},{21,22,39}}, 'PM2', 30.0, P6),
+  P7 = addValue('Station 2', {{2017, 5, 4}, {21, 22, 39}}, 'PM2', 30.0, P6),
   io:fwrite("~62p~n", [P7]),
   Values = getOneValue('Station 1', date(Datetime), 'PM2', P7),
   io:fwrite("~62p~n", [Values]),

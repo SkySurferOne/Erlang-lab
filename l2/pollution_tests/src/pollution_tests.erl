@@ -37,5 +37,12 @@ getDeviation_test() ->
   ?assertEqual(10.0, getDeviation('PM2', {21,22,39}, P6)),
   ?assertError(badarith, getDeviation('PM1', {21,22,39}, P6)).
 
+addValue_sameMeasuere_test() ->
+  P = createMonitor(),
+  P2 = addStation('Station 1', {52, 32}, P),
+  P3 = addValue('Station 1', {{2017,5,4},{21,22,39}}, 'PM2', 10.0, P2),
+  P4 = addValue('Station 1', {{2017,5,4},{21,22,39}}, 'PM2', 10.0, P3),
+  ?assertEqual({error, exist}, P4).
+
 %% goo.gl/kxShFQ
 %% test 5 funkcja
